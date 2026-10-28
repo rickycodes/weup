@@ -12,15 +12,16 @@ Add a workflow to your repository and set the targets:
 name: Uptime check
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "3,13,23,33,43,53 * * * *"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: uptime-check
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
+  queue: max
 
 jobs:
   check:
@@ -34,6 +35,7 @@ jobs:
           smtp-host: ${{ secrets.SMTP_HOST }}
           smtp-username: ${{ secrets.SMTP_USERNAME }}
           smtp-password: ${{ secrets.SMTP_PASSWORD }}
+          state-key: production-monitor
 ```
 
 Pin the action to a release tag (such as `@v1`) or a commit SHA. Set `domain`,
@@ -44,6 +46,11 @@ runner.
 To check only a website, provide `domain` and omit `email`. To check only mail
 routing, provide `email` and omit `domain`.
 
+When using alerts, set a `state-key` that uniquely identifies this monitor in
+the repository. Use a different key for every independent monitor, including
+multiple calls in one workflow. The key can contain letters, numbers, dots,
+underscores, and dashes, up to 64 characters.
+
 Email alert inputs are optional. With `alert-to` omitted, the action runs the
 check directly and fails the step if any selected check fails. When `alert-to` is
 set, provide `smtp-host`, `smtp-username`, and `smtp-password`; `smtp-port`
@@ -53,9 +60,9 @@ every 24 hours, and one recovery alert when checks pass again. Store SMTP
 credentials and the recipient as repository or organization Actions secrets.
 For Gmail, use an app password.
 
-Alert state is stored in the Actions cache under `.weup-state`. Cache entries
-can be evicted, and scheduled GitHub Actions runs may start late during busy
-periods. After state loss, the three-failure threshold starts over.
+Alert state is stored in the Actions cache under `.weup-state/<state-key>`.
+Cache entries can be evicted, and scheduled GitHub Actions runs may start late
+during busy periods. After state loss, the three-failure threshold starts over.
 
 ## Run locally
 

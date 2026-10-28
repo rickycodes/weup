@@ -2,15 +2,16 @@ name: Uptime check
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "3,13,23,33,43,53 * * * *"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: uptime-monitor
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
+  queue: max
 
 jobs:
   check:
@@ -26,3 +27,4 @@ jobs:
           smtp-port: ${{ secrets.SMTP_PORT || '465' }}
           smtp-username: ${{ secrets.SMTP_USERNAME }}
           smtp-password: ${{ secrets.SMTP_PASSWORD }}
+          state-key: uptime-main

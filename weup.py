@@ -54,8 +54,8 @@ def lookup_mx(domain: str) -> list[str]:
 
 
 def check_email_route(email: str) -> bool:
-    _, separator, mail_domain = email.rpartition("@")
-    if not separator or not mail_domain or "@" in mail_domain:
+    local_part, separator, mail_domain = email.rpartition("@")
+    if not separator or not local_part or not mail_domain or "@" in mail_domain:
         print(f"email ({email}): DOWN (invalid email address)")
         return False
     try:

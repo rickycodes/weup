@@ -7,6 +7,9 @@ inputs:
   email:
     description: Email address whose domain's MX records are checked. Optional if domain is provided.
     required: false
+  state-key:
+    description: Unique state namespace required when email alerts are enabled.
+    required: false
   alert-to:
     description: Recipient for outage and recovery notifications. Leave empty to disable notifications.
     required: false
@@ -31,9 +34,15 @@ runs:
       env:
         WEUP_DOMAIN: ${{ inputs.domain }}
         WEUP_EMAIL: ${{ inputs.email }}
+        ALERT_TO: ${{ inputs.alert-to }}
+        WEUP_STATE_KEY: ${{ inputs.state-key }}
       run: |
         if [[ -z "$WEUP_DOMAIN" && -z "$WEUP_EMAIL" ]]; then
           echo "::error::Provide at least one of the domain or email inputs."
+          exit 2
+        fi
+        if [[ -n "$ALERT_TO" && ! "$WEUP_STATE_KEY" =~ ^[A-Za-z0-9._-]{1,64}$ ]]; then
+          echo "::error::When alerts are enabled, set state-key to a unique ID (letters, numbers, dot, underscore, or dash; up to 64 characters)."
           exit 2
         fi
     - uses: actions/setup-python@v5
@@ -46,9 +55,9 @@ runs:
       if: inputs.alert-to != ''
       uses: actions/cache/restore@v4
       with:
-        path: ${{ github.workspace }}/.weup-state
-        key: weup-state-${{ github.run_id }}-${{ github.run_attempt }}
-        restore-keys: weup-state-
+        path: ${{ github.workspace }}/.weup-state/${{ inputs.state-key }}
+        key: weup-state-${{ inputs.state-key }}-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: weup-state-${{ inputs.state-key }}-
     - name: Run service checks
       shell: bash
       env:
@@ -59,7 +68,7 @@ runs:
         SMTP_PORT: ${{ inputs.smtp-port }}
         SMTP_USERNAME: ${{ inputs.smtp-username }}
         SMTP_PASSWORD: ${{ inputs.smtp-password }}
-        WEUP_STATE_FILE: ${{ github.workspace }}/.weup-state/state.json
+        WEUP_STATE_FILE: ${{ github.workspace }}/.weup-state/${{ inputs.state-key }}/state.json
       run: |
         ARGS=()
         if [[ -n "$WEUP_DOMAIN" ]]; then
@@ -77,5 +86,5 @@ runs:
       if: always() && inputs.alert-to != ''
       uses: actions/cache/save@v4
       with:
-        path: ${{ github.workspace }}/.weup-state
-        key: weup-state-${{ github.run_id }}-${{ github.run_attempt }}
+        path: ${{ github.workspace }}/.weup-state/${{ inputs.state-key }}
+        key: weup-state-${{ inputs.state-key }}-${{ github.run_id }}-${{ github.run_attempt }}
