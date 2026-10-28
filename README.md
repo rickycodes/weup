@@ -32,9 +32,9 @@ jobs:
           smtp-password: ${{ secrets.SMTP_PASSWORD }}
 ```
 
-Pin the action to a release tag (such as `@v1`) or a commit SHA. The `domain`
-and `email` inputs default to `ricky.codes` and `hello@ricky.codes`; set them
-to your own targets. The action installs Python and `dnsutils` on the runner.
+Pin the action to a release tag (such as `@v1`) or a commit SHA. Set `domain`
+and `email` to the targets you want checked. The action installs Python and
+`dnsutils` on the runner.
 
 Email alert inputs are optional. With `alert-to` omitted, the action runs the
 check directly and fails the step if either check fails. When `alert-to` is
