@@ -47,21 +47,47 @@ def send_alert(subject: str, body: str) -> None:
         smtp.send_message(message)
 
 
+def validate_alert_config() -> None:
+    required = ["ALERT_TO", "SMTP_HOST", "SMTP_USERNAME", "SMTP_PASSWORD"]
+    missing = [name for name in required if not os.environ.get(name)]
+    if missing:
+        raise RuntimeError("Missing alert configuration: " + ", ".join(missing))
+    try:
+        port = int(os.environ.get("SMTP_PORT", "465"))
+    except ValueError as error:
+        raise RuntimeError("SMTP_PORT must be an integer") from error
+    if not 1 <= port <= 65535:
+        raise RuntimeError("SMTP_PORT must be between 1 and 65535")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--domain", default=os.environ.get("CHECK_DOMAIN", "ricky.codes"))
-    parser.add_argument("--email", default=os.environ.get("CHECK_EMAIL", "hello@ricky.codes"))
+    parser.add_argument("--domain")
+    parser.add_argument("--email")
     parser.add_argument("--state-file", type=Path, default=Path(".uptime-state/state.json"))
     args = parser.parse_args()
 
-    website_ok = check_website(args.domain)
-    email_ok = check_email_route(args.email)
-    healthy = website_ok and email_ok
+    if not args.domain and not args.email:
+        parser.error("provide at least one of --domain or --email")
+
+    validate_alert_config()
+
+    checks = []
+    if args.domain:
+        checks.append((f"website {args.domain}", check_website(args.domain)))
+    if args.email:
+        checks.append((f"email {args.email}", check_email_route(args.email)))
+    healthy = all(result for _, result in checks)
+    target_label = " / ".join(target for target, _ in checks)
+    target_state = {"domain": args.domain, "email": args.email}
 
     args.state_file.parent.mkdir(parents=True, exist_ok=True)
     try:
         state = json.loads(args.state_file.read_text())
     except FileNotFoundError:
+        state = {}
+
+    if state.get("targets") != target_state:
         state = {}
 
     previous_status = state.get("status", "up")
@@ -74,8 +100,8 @@ def main() -> int:
         if previous_status == "down" and state.get("alert_sent"):
             duration = current_time - (parse_time(state.get("outage_started_at")) or current_time)
             notification = (
-                f"[weup] Recovered: {args.domain}",
-                f"Checks for {args.domain} and {args.email} are passing again.\n"
+                f"[weup] Recovered: {target_label}",
+                f"Checks for {target_label} are passing again.\n"
                 f"Outage duration: {duration}.",
             )
         state = {"status": "up", "consecutive_failures": 0}
@@ -91,8 +117,8 @@ def main() -> int:
             if should_alert:
                 kind = "Outage" if not state.get("alert_sent") else "Still down"
                 notification = (
-                    f"[weup] {kind}: {args.domain}",
-                    f"One or more checks are failing for {args.domain} / {args.email}.\n"
+                    f"[weup] {kind}: {target_label}",
+                    f"One or more checks are failing for {target_label}.\n"
                     f"Consecutive failed checks: {failures}.\n"
                     "See the GitHub Actions run for the check output.",
                 )
@@ -104,6 +130,7 @@ def main() -> int:
         state["last_alert_at"] = current_time.isoformat()
         print(f"Notification sent: {notification[0]}")
 
+    state["targets"] = target_state
     args.state_file.write_text(json.dumps(state, indent=2) + "\n")
     return 0 if healthy else 1
 

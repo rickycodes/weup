@@ -1,14 +1,12 @@
 name: WeUp service check
-description: Check a website over HTTPS and verify email-domain MX records, with optional outage email alerts.
+description: Check website HTTPS and email-domain MX records on Ubuntu, with optional outage email alerts.
 inputs:
   domain:
-    description: Website domain to check.
+    description: Website domain to check. Optional if email is provided.
     required: false
-    default: ricky.codes
   email:
-    description: Email address whose domain's MX records are checked.
+    description: Email address whose domain's MX records are checked. Optional if domain is provided.
     required: false
-    default: hello@ricky.codes
   alert-to:
     description: Recipient for outage and recovery notifications. Leave empty to disable notifications.
     required: false
@@ -28,6 +26,16 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Validate targets
+      shell: bash
+      env:
+        WEUP_DOMAIN: ${{ inputs.domain }}
+        WEUP_EMAIL: ${{ inputs.email }}
+      run: |
+        if [[ -z "$WEUP_DOMAIN" && -z "$WEUP_EMAIL" ]]; then
+          echo "::error::Provide at least one of the domain or email inputs."
+          exit 2
+        fi
     - uses: actions/setup-python@v5
       with:
         python-version: "3.x"
@@ -53,10 +61,17 @@ runs:
         SMTP_PASSWORD: ${{ inputs.smtp-password }}
         WEUP_STATE_FILE: ${{ github.workspace }}/.weup-state/state.json
       run: |
+        ARGS=()
+        if [[ -n "$WEUP_DOMAIN" ]]; then
+          ARGS+=(--domain "$WEUP_DOMAIN")
+        fi
+        if [[ -n "$WEUP_EMAIL" ]]; then
+          ARGS+=(--email "$WEUP_EMAIL")
+        fi
         if [[ -n "$ALERT_TO" ]]; then
-          python3 "$GITHUB_ACTION_PATH/monitor.py" --domain "$WEUP_DOMAIN" --email "$WEUP_EMAIL" --state-file "$WEUP_STATE_FILE"
+          python3 "$GITHUB_ACTION_PATH/monitor.py" "${ARGS[@]}" --state-file "$WEUP_STATE_FILE"
         else
-          python3 "$GITHUB_ACTION_PATH/weup.py" --domain "$WEUP_DOMAIN" --email "$WEUP_EMAIL"
+          python3 "$GITHUB_ACTION_PATH/weup.py" "${ARGS[@]}"
         fi
     - name: Save outage state
       if: always() && inputs.alert-to != ''

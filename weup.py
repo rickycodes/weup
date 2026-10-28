@@ -17,16 +17,21 @@ TIMEOUT = 4
 
 
 def check_website(domain: str) -> bool:
-    request = urllib.request.Request(f"https://{domain}/", method="HEAD")
-    try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
-            print(f"website ({domain}): UP (HTTPS {response.status})")
-            return 200 <= response.status < 400
-    except urllib.error.HTTPError as error:
-        # An HTTP response, including 4xx/5xx, means the server was reached.
-        print(f"website ({domain}): DOWN (HTTPS {error.code})")
-    except Exception as error:
-        print(f"website ({domain}): DOWN ({error})")
+    for method in ("HEAD", "GET"):
+        request = urllib.request.Request(f"https://{domain}/", method=method)
+        try:
+            with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+                print(f"website ({domain}): UP (HTTPS {response.status}, {method})")
+                return 200 <= response.status < 400
+        except urllib.error.HTTPError as error:
+            if method == "HEAD" and error.code in (405, 501):
+                error.close()
+                continue
+            # An HTTP response, including 4xx/5xx, means the server was reached.
+            print(f"website ({domain}): DOWN (HTTPS {error.code})")
+        except Exception as error:
+            print(f"website ({domain}): DOWN ({error})")
+        return False
     return False
 
 
@@ -67,17 +72,22 @@ def check_email_route(email: str) -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Check website HTTPS and email-domain MX records.")
-    parser.add_argument("--domain", default="ricky.codes", help="website domain (default: ricky.codes)")
+    parser.add_argument("--domain", help="website domain to check")
     parser.add_argument(
         "--email",
-        default="hello@ricky.codes",
-        help="email address whose domain's MX records are checked (default: hello@ricky.codes)",
+        help="email address whose domain's MX records are checked",
     )
     args = parser.parse_args()
 
-    website_ok = check_website(args.domain)
-    email_ok = check_email_route(args.email)
-    return 0 if website_ok and email_ok else 1
+    if not args.domain and not args.email:
+        parser.error("provide at least one of --domain or --email")
+
+    results = []
+    if args.domain:
+        results.append(check_website(args.domain))
+    if args.email:
+        results.append(check_email_route(args.email))
+    return 0 if all(results) else 1
 
 
 if __name__ == "__main__":
