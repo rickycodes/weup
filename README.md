@@ -6,7 +6,7 @@ it does not connect to an SMTP server or confirm mailbox delivery.
 
 ## Use as a GitHub Action
 
-Add a workflow to your repository, replacing `OWNER/REPO` and the targets:
+Add a workflow to your repository and set the targets:
 
 ```yaml
 name: Uptime check
@@ -22,7 +22,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: OWNER/REPO@v1
+      - uses: rickycodes/weup@v1
         with:
           domain: example.com
           email: hello@example.com
