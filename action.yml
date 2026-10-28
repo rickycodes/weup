@@ -1,0 +1,66 @@
+name: WeUp service check
+description: Check a website over HTTPS and verify email-domain MX records, with optional outage email alerts.
+inputs:
+  domain:
+    description: Website domain to check.
+    required: false
+    default: ricky.codes
+  email:
+    description: Email address whose domain's MX records are checked.
+    required: false
+    default: hello@ricky.codes
+  alert-to:
+    description: Recipient for outage and recovery notifications. Leave empty to disable notifications.
+    required: false
+  smtp-host:
+    description: SMTP server hostname.
+    required: false
+  smtp-port:
+    description: SMTP over SSL port.
+    required: false
+    default: "465"
+  smtp-username:
+    description: SMTP username and sender address.
+    required: false
+  smtp-password:
+    description: SMTP password or app password.
+    required: false
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.x"
+    - name: Install DNS tools
+      shell: bash
+      run: sudo apt-get update && sudo apt-get install --yes dnsutils
+    - name: Restore outage state
+      if: inputs.alert-to != ''
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ github.workspace }}/.weup-state
+        key: weup-state-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: weup-state-
+    - name: Run service checks
+      shell: bash
+      env:
+        WEUP_DOMAIN: ${{ inputs.domain }}
+        WEUP_EMAIL: ${{ inputs.email }}
+        ALERT_TO: ${{ inputs.alert-to }}
+        SMTP_HOST: ${{ inputs.smtp-host }}
+        SMTP_PORT: ${{ inputs.smtp-port }}
+        SMTP_USERNAME: ${{ inputs.smtp-username }}
+        SMTP_PASSWORD: ${{ inputs.smtp-password }}
+        WEUP_STATE_FILE: ${{ github.workspace }}/.weup-state/state.json
+      run: |
+        if [[ -n "$ALERT_TO" ]]; then
+          python3 "$GITHUB_ACTION_PATH/monitor.py" --domain "$WEUP_DOMAIN" --email "$WEUP_EMAIL" --state-file "$WEUP_STATE_FILE"
+        else
+          python3 "$GITHUB_ACTION_PATH/weup.py" --domain "$WEUP_DOMAIN" --email "$WEUP_EMAIL"
+        fi
+    - name: Save outage state
+      if: always() && inputs.alert-to != ''
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ github.workspace }}/.weup-state
+        key: weup-state-${{ github.run_id }}-${{ github.run_attempt }}

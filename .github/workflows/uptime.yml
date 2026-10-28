@@ -17,30 +17,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: ./
         with:
-          python-version: "3.x"
-      - name: Install DNS tools
-        run: sudo apt-get update && sudo apt-get install --yes dnsutils
-      - name: Restore outage state
-        uses: actions/cache/restore@v4
-        with:
-          path: .uptime-state
-          key: uptime-state-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: uptime-state-
-      - name: Check services and send alerts
-        env:
-          CHECK_DOMAIN: ${{ vars.CHECK_DOMAIN || 'ricky.codes' }}
-          CHECK_EMAIL: ${{ vars.CHECK_EMAIL || 'hello@ricky.codes' }}
-          ALERT_TO: ${{ secrets.ALERT_TO }}
-          SMTP_HOST: ${{ secrets.SMTP_HOST }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT || '465' }}
-          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
-          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-        run: python3 monitor.py --state-file .uptime-state/state.json
-      - name: Save outage state
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: .uptime-state
-          key: uptime-state-${{ github.run_id }}-${{ github.run_attempt }}
+          domain: ${{ vars.CHECK_DOMAIN || 'ricky.codes' }}
+          email: ${{ vars.CHECK_EMAIL || 'hello@ricky.codes' }}
+          alert-to: ${{ secrets.ALERT_TO }}
+          smtp-host: ${{ secrets.SMTP_HOST }}
+          smtp-port: ${{ secrets.SMTP_PORT || '465' }}
+          smtp-username: ${{ secrets.SMTP_USERNAME }}
+          smtp-password: ${{ secrets.SMTP_PASSWORD }}
